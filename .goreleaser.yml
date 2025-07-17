@@ -161,12 +161,6 @@ release:
     docker pull ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:{{.Version}}
     ```
 
-    ## What's New
-
-    {{ range .Notes }}
-    {{ . }}
-    {{ end }}
-
   # Don't create a release if Herald already created one
   disable: false
 
