@@ -52,10 +52,18 @@ type GitConfig struct {
 
 // CIConfig holds CI integration settings
 type CIConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Provider         string `yaml:"provider"`
-	TriggerOnRelease bool   `yaml:"trigger_on_release"`
-	WebhookURL       string `yaml:"webhook_url"`
+	Enabled          bool             `yaml:"enabled"`
+	Provider         string           `yaml:"provider"`
+	TriggerOnRelease bool             `yaml:"trigger_on_release"`
+	WebhookURL       string           `yaml:"webhook_url"`
+	GitLab           GitLabConfig     `yaml:"gitlab,omitempty"`
+}
+
+// GitLabConfig holds GitLab-specific CI settings
+type GitLabConfig struct {
+	ProjectID   string `yaml:"project_id"`
+	AccessToken string `yaml:"access_token"`
+	CreateRelease bool   `yaml:"create_release"`
 }
 
 // DefaultConfig returns a default configuration
@@ -263,7 +271,7 @@ ci:
   
   # CI provider type
   # Supported values: "github", "gitlab", "webhook"
-  provider: "github"
+  provider: "gitlab"
   
   # Whether to trigger CI pipeline after creating a release
   trigger_on_release: true
@@ -274,6 +282,18 @@ ci:
   # - GitLab: https://gitlab.com/api/v4/projects/ID/trigger/pipeline
   # - Webhook: Your custom webhook endpoint
   webhook_url: ""
+  
+  # GitLab-specific configuration (only used when provider is "gitlab")
+  gitlab:
+    # GitLab project ID (numeric ID or "group/project-name")
+    project_id: ""
+    
+    # GitLab access token with API permissions
+    # Can also be set via GITLAB_ACCESS_TOKEN environment variable
+    access_token: ""
+    
+    # Whether to create GitLab releases automatically
+    create_release: true
 `
 }
 

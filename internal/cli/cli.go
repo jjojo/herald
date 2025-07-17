@@ -23,13 +23,15 @@ and manage semantic versioning.`,
 }
 
 var (
-	cfgFile string
-	dryRun  bool
+	cfgFile     string
+	dryRun      bool
+	nextVersion bool
 )
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is .heraldrc)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "preview changes without applying them")
+	rootCmd.PersistentFlags().BoolVar(&nextVersion, "next-version", false, "output only the next version number")
 
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
@@ -321,6 +323,10 @@ func executeChangelog(cfg *config.Config, dryRun bool) error {
 
 // executeVersionBump calculates and displays the next version
 func executeVersionBump(cfg *config.Config) error {
+	// If --next-version flag is set, just output the version number
+	if nextVersion {
+		return executeNextVersionOnly(cfg)
+	}
 	// Open git repository
 	repo, err := git.OpenRepository(".")
 	if err != nil {
@@ -409,5 +415,67 @@ func executeVersionBump(cfg *config.Config) error {
 		}
 	}
 
+	return nil
+}
+
+// executeNextVersionOnly outputs only the next version number (for CI/CD integration)
+func executeNextVersionOnly(cfg *config.Config) error {
+	// Open git repository
+	repo, err := git.OpenRepository(".")
+	if err != nil {
+		return fmt.Errorf("failed to open git repository: %w", err)
+	}
+
+	// Get latest tag
+	latestTag, err := repo.GetLatestTag()
+	if err != nil {
+		// No tags found, use initial version
+	}
+
+	// Get current version
+	versionManager := version.NewManager(cfg)
+	var currentVersion *version.Version
+	if latestTag != nil {
+		currentVersion, err = versionManager.GetCurrentVersion(latestTag.Name)
+		if err != nil {
+			return fmt.Errorf("failed to parse current version: %w", err)
+		}
+	} else {
+		currentVersion, err = versionManager.GetInitialVersion()
+		if err != nil {
+			return fmt.Errorf("failed to get initial version: %w", err)
+		}
+	}
+
+	// Get commits since last tag
+	var gitCommits []*git.Commit
+	if latestTag != nil {
+		gitCommits, err = repo.GetCommitsSinceTag(latestTag.Name)
+	} else {
+		gitCommits, err = repo.GetAllCommits()
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get commits: %w", err)
+	}
+
+	if len(gitCommits) == 0 {
+		// No new commits, output current version
+		fmt.Print(currentVersion.String())
+		return nil
+	}
+
+	// Parse conventional commits
+	parser := commits.NewParser(cfg)
+	conventionalCommits, err := parser.ParseCommits(gitCommits)
+	if err != nil {
+		return fmt.Errorf("failed to parse commits: %w", err)
+	}
+
+	// Calculate version bump
+	bumpType := parser.CalculateBumpType(conventionalCommits)
+	nextVersion := versionManager.CalculateNextVersion(currentVersion, bumpType)
+
+	// Output only the version number (no newline for CI/CD piping)
+	fmt.Print(nextVersion.String())
 	return nil
 } 

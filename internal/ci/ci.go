@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"herald/internal/config"
@@ -79,12 +80,20 @@ func (i *Integrator) triggerGitHubAction(releaseInfo *ReleaseInfo) error {
 	return i.sendWebhookRequest(payload)
 }
 
-// triggerGitLabPipeline triggers a GitLab CI pipeline
+// triggerGitLabPipeline triggers a GitLab CI pipeline and creates a GitLab release
 func (i *Integrator) triggerGitLabPipeline(releaseInfo *ReleaseInfo) error {
 	if i.config.CI.WebhookURL == "" {
 		return fmt.Errorf("webhook URL is required for GitLab integration")
 	}
 
+	// Create GitLab release first
+	err := i.createGitLabRelease(releaseInfo)
+	if err != nil {
+		// Log but don't fail the pipeline trigger
+		fmt.Printf("Warning: Failed to create GitLab release: %v\n", err)
+	}
+
+	// Trigger pipeline
 	payload := map[string]interface{}{
 		"token":     extractTokenFromURL(i.config.CI.WebhookURL),
 		"ref":       releaseInfo.Branch,
@@ -264,4 +273,68 @@ func (ri *ReleaseInfo) AddMetadata(key, value string) {
 		ri.Metadata = make(map[string]string)
 	}
 	ri.Metadata[key] = value
+}
+
+// createGitLabRelease creates a release using GitLab's Release API
+func (i *Integrator) createGitLabRelease(releaseInfo *ReleaseInfo) error {
+	// Skip if GitLab release creation is disabled
+	if !i.config.CI.GitLab.CreateRelease {
+		return nil
+	}
+
+	// Get project ID from config
+	projectID := i.config.CI.GitLab.ProjectID
+	if projectID == "" {
+		return fmt.Errorf("GitLab project ID is required for release creation")
+	}
+
+	// Get access token from config or environment
+	accessToken := i.config.CI.GitLab.AccessToken
+	if accessToken == "" {
+		accessToken = os.Getenv("GITLAB_ACCESS_TOKEN")
+	}
+	if accessToken == "" {
+		return fmt.Errorf("GitLab access token is required for release creation (set in config or GITLAB_ACCESS_TOKEN env var)")
+	}
+
+	// GitLab Release API URL
+	releaseURL := fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/releases", projectID)
+
+	// Create release payload
+	releasePayload := map[string]interface{}{
+		"name":        fmt.Sprintf("Release %s", releaseInfo.Version),
+		"tag_name":    releaseInfo.Tag,
+		"description": releaseInfo.Changelog,
+		"released_at": releaseInfo.ReleaseDate.Format(time.RFC3339),
+	}
+
+	// Marshal payload
+	jsonData, err := json.Marshal(releasePayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal GitLab release payload: %w", err)
+	}
+
+	// Create request
+	req, err := http.NewRequest("POST", releaseURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create GitLab release request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("User-Agent", "Herald/1.0")
+
+	// Send request
+	resp, err := i.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send GitLab release request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("GitLab release creation failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
 } 

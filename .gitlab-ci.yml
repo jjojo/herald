@@ -1,0 +1,134 @@
+# GitLab CI/CD Example for Herald Release Management
+# This demonstrates a two-stage workflow:
+# 1. Build stage: Get version and build artifacts
+# 2. Release stage: Create git tag, changelog, and GitLab release
+
+stages:
+  - build
+  - test
+  - release
+
+variables:
+  # Herald will output version info to these variables
+  HERALD_VERSION: ""
+
+# Build Stage - Get version and build artifacts
+build:
+  stage: build
+  image: golang:1.21
+  before_script:
+    - go build -o herald ./cmd/herald
+  script:
+    - export HERALD_VERSION=$(./herald version-bump --next-version)
+    - echo "Next version will be:$HERALD_VERSION"
+    - go build -ldflags "-X main.Version=$HERALD_VERSION" -o myapp ./cmd/myapp
+    - tar -czf myapp-$HERALD_VERSION.tar.gz myapp
+    - echo "Built artifact:myapp-$HERALD_VERSION.tar.gz"
+    - echo "HERALD_VERSION=$HERALD_VERSION" > build.env
+  artifacts:
+    paths:
+      - myapp-*.tar.gz
+      - herald
+    expire_in: 1 hour
+    reports:
+      dotenv: build.env
+
+# Test Stage - Run tests on built artifacts
+test:
+  stage: test
+  image: golang:1.21
+  dependencies:
+    - build
+  script:
+    - echo "Testing version $HERALD_VERSION"
+    - go test ./...
+
+# Release Stage - Create git tag, changelog, and GitLab release
+release:
+  stage: release
+  image: golang:1.21
+  dependencies:
+    - build
+  rules:
+    # Only run on main/master branch
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
+    # Only run if there are actual changes to release
+    - if: $HERALD_VERSION != ""
+  variables:
+    # GitLab-specific variables for Herald
+    GITLAB_ACCESS_TOKEN: $CI_JOB_TOKEN # Use GitLab CI token
+  before_script:
+    - git config --global user.email "ci@gitlab.com"
+    - git config --global user.name "GitLab CI"
+    - git fetch --unshallow
+  script:
+    - |
+      cat > .heraldrc << EOF
+      version:
+        initial: "0.1.0"
+        prefix: "v"
+      commits:
+        types:
+          feat:
+            title: "Features"
+            semver: "minor"
+          fix:
+            title: "Bug Fixes"
+            semver: "patch"
+          docs:
+            title: "Documentation"
+            semver: "none"
+          style:
+            title: "Styles"
+            semver: "none"
+          refactor:
+            title: "Code Refactoring"
+            semver: "none"
+          test:
+            title: "Tests"
+            semver: "none"
+          chore:
+            title: "Chores"
+            semver: "none"
+        breaking_change_keywords:
+          - "BREAKING CHANGE"
+          - "BREAKING-CHANGE"
+      changelog:
+        file: "CHANGELOG.md"
+        template: "default"
+        include_all: false
+      git:
+        tag_message: "Release {version}"
+        commit_changelog: true
+        commit_message: "chore: update changelog for {version}"
+      ci:
+        enabled: true
+        provider: "gitlab"
+        trigger_on_release: false  # We're already in CI
+        webhook_url: ""
+        gitlab:
+          project_id: "$CI_PROJECT_ID"
+          access_token: "$GITLAB_ACCESS_TOKEN"
+          create_release: true
+            EOF
+    - ./herald release
+    - git push origin HEAD:$CI_COMMIT_REF_NAME
+    - git push --tags
+  artifacts:
+    paths:
+      - CHANGELOG.md
+    expire_in: 1 week
+
+# Alternative: Manual release trigger
+manual_release:
+  stage: release
+  image: golang:1.21
+  dependencies:
+    - build
+  when: manual
+  variables:
+    GITLAB_ACCESS_TOKEN: $CI_JOB_TOKEN
+  script:
+    - ./herald release
+    - git push origin HEAD:$CI_COMMIT_REF_NAME
+    - git push --tags
