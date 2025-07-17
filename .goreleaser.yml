@@ -72,12 +72,12 @@ archives:
 brews:
   - name: herald
     repository:
-      owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+      owner: "jjojo"
       name: homebrew-tap
       token: "{{ .Env.GITHUB_TOKEN }}"
 
     # Homebrew formula details
-    homepage: https://github.com/{{ .Env.GITHUB_REPOSITORY }}
+    homepage: https://github.com/jjojo/herald
     description: "Release management tool using conventional commits"
     license: MIT
 
@@ -112,8 +112,8 @@ snapcrafts:
 # Docker images
 dockers:
   - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:latest-amd64"
+      - "ghcr.io/jjojo/herald:{{ .Version }}-amd64"
+      - "ghcr.io/jjojo/herald:latest-amd64"
 
     dockerfile: Dockerfile
     use: buildx

@@ -101,16 +101,7 @@ release:
         tag_message: "Release {version}"
         commit_changelog: true
         commit_message: "chore: update changelog for {version}"
-      ci:
-        enabled: true
-        provider: "gitlab"
-        trigger_on_release: false  # We're already in CI
-        webhook_url: ""
-        gitlab:
-          project_id: "$CI_PROJECT_ID"
-          access_token: "$GITLAB_ACCESS_TOKEN"
-          create_release: true
-            EOF
+      EOF
     - ./herald release
     - git push origin HEAD:$CI_COMMIT_REF_NAME
     - git push --tags

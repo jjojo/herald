@@ -15,7 +15,6 @@ type Config struct {
 	Commits   CommitsConfig   `yaml:"commits"`
 	Changelog ChangelogConfig `yaml:"changelog"`
 	Git       GitConfig       `yaml:"git"`
-	CI        CIConfig        `yaml:"ci"`
 }
 
 // VersionConfig holds version-related settings
@@ -50,28 +49,7 @@ type GitConfig struct {
 	CommitMessage   string `yaml:"commit_message"`
 }
 
-// CIConfig holds CI integration settings
-type CIConfig struct {
-	Enabled          bool             `yaml:"enabled"`
-	Provider         string           `yaml:"provider"`
-	TriggerOnRelease bool             `yaml:"trigger_on_release"`
-	GitLab           GitLabConfig     `yaml:"gitlab,omitempty"`
-	GitHub           GitHubConfig     `yaml:"github,omitempty"`
-}
 
-// GitLabConfig holds GitLab-specific CI settings
-type GitLabConfig struct {
-	ProjectID     string `yaml:"project_id"`
-	AccessToken   string `yaml:"access_token"`
-	CreateRelease bool   `yaml:"create_release"`
-}
-
-// GitHubConfig holds GitHub-specific CI settings
-type GitHubConfig struct {
-	Repository    string `yaml:"repository"`    // owner/repo
-	AccessToken   string `yaml:"access_token"`
-	CreateRelease bool   `yaml:"create_release"`
-}
 
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
@@ -122,21 +100,6 @@ func DefaultConfig() *Config {
 			TagMessage:      "Release {version}",
 			CommitChangelog: true,
 			CommitMessage:   "chore: update changelog for {version}",
-		},
-		CI: CIConfig{
-			Enabled:          false,
-			Provider:         "github",
-			TriggerOnRelease: true,
-			GitHub: GitHubConfig{
-				Repository:    "",
-				AccessToken:   "",
-				CreateRelease: true,
-			},
-			GitLab: GitLabConfig{
-				ProjectID:     "",
-				AccessToken:   "",
-				CreateRelease: true,
-			},
 		},
 	}
 }
@@ -279,42 +242,6 @@ git:
   # Commit message template when committing changelog
   # {version} will be replaced with the actual version
   commit_message: "chore: update changelog for {version}"
-
-# CI/CD Integration (Optional)
-ci:
-  # Enable or disable CI integration
-  enabled: false
-  
-  # CI provider type
-  # Supported values: "github", "gitlab"
-  provider: "github"
-  
-  # Whether to trigger CI pipeline after creating a release
-  trigger_on_release: true
-  
-  # GitHub-specific configuration (only used when provider is "github")
-  github:
-    # GitHub repository in "owner/repo" format
-    repository: ""
-    
-    # GitHub access token with repo permissions
-    # Can also be set via GITHUB_TOKEN environment variable
-    access_token: ""
-    
-    # Whether to create GitHub releases automatically
-    create_release: true
-  
-  # GitLab-specific configuration (only used when provider is "gitlab")
-  gitlab:
-    # GitLab project ID (numeric ID or "group/project-name")
-    project_id: ""
-    
-    # GitLab access token with API permissions
-    # Can also be set via GITLAB_ACCESS_TOKEN environment variable
-    access_token: ""
-    
-    # Whether to create GitLab releases automatically
-    create_release: true
 `
 }
 

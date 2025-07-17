@@ -1,0 +1,60 @@
+# Go source code
+*.go
+go.mod
+go.sum
+cmd/
+internal/
+pkg/
+
+# Build artifacts
+herald
+*.exe
+
+# Development files
+.git/
+.github/
+.gitlab-ci.yml
+.goreleaser.yml
+Dockerfile
+docker-compose.yml
+
+# Documentation (keep README.md and LICENSE)
+*.md
+!README.md
+!package.json
+
+# Test files
+*_test.go
+test/
+tests/
+
+# Configuration examples
+.heraldrc
+*.heraldrc
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node modules (shouldn't be there anyway)
+node_modules/
+
+# CI files
+.travis.yml
+.circleci/
+appveyor.yml
+
+# Other
+.gitignore 

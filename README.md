@@ -1,5 +1,11 @@
 # Herald
 
+<div align="center">
+  <img src="docs/assets/herald-logo.jpeg" alt="Herald Logo" width="300">
+  <br>
+  <em>A herald is a traditional messenger who announces important news, declarations, and proclamations on behalf of their sovereign - just as Herald announces your software releases with authority and precision.</em>
+</div>
+
 Herald is a CLI tool that automates release management by analyzing git commit history using conventional commits standard to generate release notes and manage semantic versioning.
 
 ## Features
@@ -14,10 +20,46 @@ Herald is a CLI tool that automates release management by analyzing git commit h
 
 ## Installation
 
+### NPM (Recommended)
+
+Use Herald with `npx` without installing:
+
+```bash
+npx herald --help
+npx herald init
+npx herald release
+```
+
+Install globally via npm:
+
+```bash
+npm install -g herald
+herald --help
+```
+
+### Direct Download
+
+Download binaries from [GitHub Releases](https://github.com/jjojo/herald/releases/latest):
+
+```bash
+# Linux/macOS
+curl -L https://github.com/jjojo/herald/releases/latest/download/herald_linux_amd64.tar.gz | tar xz
+chmod +x herald
+
+# Windows
+# Download herald_windows_amd64.zip from releases page
+```
+
+### Docker
+
+```bash
+docker run --rm -v $(pwd):/app ghcr.io/jjojo/herald:latest version-bump
+```
+
 ### From Source
 
 ```bash
-git clone https://github.com/your-org/herald.git
+git clone https://github.com/jjojo/herald.git
 cd herald
 go build -o herald ./cmd/herald
 ```

@@ -1,0 +1,52 @@
+{
+  "name": "herald",
+  "version": "1.0.0",
+  "description": "Release management tool using conventional commits and semantic versioning",
+  "main": "lib/index.js",
+  "bin": {
+    "herald": "bin/herald.js"
+  },
+  "scripts": {
+    "postinstall": "node lib/install.js",
+    "test": "node lib/test.js"
+  },
+  "keywords": [
+    "release",
+    "semantic-versioning",
+    "conventional-commits",
+    "changelog",
+    "git",
+    "cli"
+  ],
+  "author": "Netnod",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jjojo/herald.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jjojo/herald/issues"
+  },
+  "homepage": "https://github.com/jjojo/herald#readme",
+  "preferGlobal": true,
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "linux",
+    "darwin",
+    "win32",
+    "freebsd"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "arm"
+  ]
+}

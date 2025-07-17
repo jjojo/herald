@@ -157,14 +157,6 @@ jobs:
             tag_message: "Release {version}"
             commit_changelog: true
             commit_message: "chore: update changelog for {version}"
-          ci:
-            enabled: true
-            provider: "github"
-            trigger_on_release: false
-            github:
-              repository: "${{ github.repository }}"
-              access_token: "${{ secrets.GITHUB_TOKEN }}"
-              create_release: true
           EOF
 
       - name: Create release with Herald
@@ -243,3 +235,47 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # NPM Publishing Stage - Publish to npm registry
+  npm-publish:
+    runs-on: ubuntu-latest
+    needs: [goreleaser]
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      needs.build.outputs.should_release == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Get latest tag
+        id: tag
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          VERSION=${TAG#v}  # Remove 'v' prefix
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Latest tag: $TAG, Version: $VERSION"
+
+      - name: Update package.json version
+        run: |
+          VERSION=${{ steps.tag.outputs.version }}
+          npm version $VERSION --no-git-tag-version
+          echo "Updated package.json to version $VERSION"
+
+      - name: Verify package contents
+        run: |
+          echo "Package contents that will be published:"
+          npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

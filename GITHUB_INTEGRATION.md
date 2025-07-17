@@ -25,24 +25,9 @@ Herald integrates seamlessly with GoReleaser to provide:
 
 ## Configuration
 
-### GitHub-Specific Settings
+### Configuration
 
-```yaml
-ci:
-  enabled: true
-  provider: "github"
-  trigger_on_release: false # Disabled in CI context
-  github:
-    repository: "owner/repo"
-    access_token: "${{ secrets.GITHUB_TOKEN }}"
-    create_release: true
-```
-
-### Environment Variables
-
-- `GITHUB_TOKEN`: GitHub access token (auto-provided in Actions)
-- `GITHUB_REPOSITORY`: Repository name in "owner/repo" format (auto-provided)
-- `GITHUB_REPOSITORY_OWNER`: Repository owner (auto-provided)
+Herald uses a simple `.heraldrc` configuration file without any CI-specific settings. The GitHub Actions workflow handles all CI integration automatically.
 
 ## Workflow Stages
 

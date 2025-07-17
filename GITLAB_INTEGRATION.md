@@ -27,33 +27,15 @@ script:
 
 ### GitLab Integration
 
-Herald can now:
+Herald provides CI/CD integration for GitLab with:
 
-- ✅ Create GitLab releases via API
-- ✅ Include changelog in release description
-- ✅ Trigger GitLab CI pipelines
-- ✅ Use GitLab CI tokens automatically
+- ✅ Version detection for CI pipelines
+- ✅ Changelog generation
+- ✅ Git tag creation
 
 ## Configuration
 
-### GitLab-Specific Settings
-
-```yaml
-ci:
-  enabled: true
-  provider: "gitlab"
-  trigger_on_release: true
-  gitlab:
-    project_id: "12345" # or "group/project-name"
-    access_token: "" # or use GITLAB_ACCESS_TOKEN env var
-    create_release: true
-```
-
-### Environment Variables
-
-- `GITLAB_ACCESS_TOKEN`: GitLab access token (recommended)
-- `CI_PROJECT_ID`: GitLab project ID (auto-provided in CI)
-- `CI_JOB_TOKEN`: GitLab CI token (auto-provided in CI)
+Herald uses a simple `.heraldrc` configuration file without any CI-specific settings. The GitLab CI pipeline handles the release process automatically.
 
 ## GitLab CI/CD Workflow
 

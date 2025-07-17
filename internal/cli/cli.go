@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"herald/internal/changelog"
-	"herald/internal/ci"
 	"herald/internal/commits"
 	"herald/internal/config"
 	"herald/internal/git"
@@ -17,7 +16,22 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "herald",
 	Short: "Herald - Release management tool using conventional commits",
-	Long: `Herald is a CLI tool that automates release management by analyzing 
+	Long: `
+ ,ggg,        gg                                                    
+dP""Y8b       88                                  ,dPYb,         8I 
+Yb, ,88       88                                  IP' Yb         8I 
+ ,"  88       88                                  I8  8I         8I 
+     88aaaaaaa88                                  I8  8'         8I 
+     88"""""""88   ,ggg,    ,gggggg,    ,gggg,gg  I8 dP    ,gggg,8I 
+     88       88  i8" "8i   dP""""8I   dP"  "Y8I  I8dP    dP"  "Y8I 
+     88       88  I8, ,8I  ,8'    8I  i8'    ,8I  I8P    i8'    ,8I 
+     88       Y8, ,YbadP' ,dP     Y8,,d8,   ,d8b,,d8b,_ ,d8,   ,d8b,
+     88       ,Y8888P"Y8888P      ,Y8P"Y8888P",Y88P'"Y88P"Y8888P",Y8
+                                                                    
+                                                                    
+                                                                    
+
+Herald is a CLI tool that automates release management by analyzing 
 git commit history using conventional commits standard to generate release notes 
 and manage semantic versioning.`,
 }
@@ -216,29 +230,6 @@ func executeRelease(cfg *config.Config, dryRun bool) error {
 	err = changelogGenerator.PrependRelease(release)
 	if err != nil {
 		return fmt.Errorf("failed to update changelog: %w", err)
-	}
-
-	// Trigger CI if configured
-	ciIntegrator := ci.NewIntegrator(cfg)
-	if ciIntegrator.IsEnabled() {
-		fmt.Printf("Triggering CI pipeline (%s)...\n", ciIntegrator.GetProvider())
-		
-		currentBranch, _ := repo.GetCurrentBranch()
-		
-		releaseInfo := ciIntegrator.CreateReleaseInfo(
-			nextVersion,
-			changelogGenerator.FormatRelease(release),
-			"", // repository - could be detected from git remote
-			currentBranch,
-			"", // commit hash - could be detected from HEAD
-		)
-		
-		err = ciIntegrator.TriggerRelease(releaseInfo)
-		if err != nil {
-			fmt.Printf("Warning: Failed to trigger CI pipeline: %v\n", err)
-		} else {
-			fmt.Println("CI pipeline triggered successfully")
-		}
 	}
 
 	fmt.Printf("\n✅ Release %s completed successfully!\n", nextVersion.String())
