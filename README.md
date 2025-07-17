@@ -68,15 +68,28 @@ herald changelog --dry-run
 
 ### `herald init`
 
-Initialize a `.heraldrc` configuration file:
+Initialize a `.heraldrc` configuration file with comprehensive inline documentation:
 
 ```bash
 herald init
 ```
 
+This creates a fully documented configuration file with comments explaining each option, valid values, and examples.
+
 ## Configuration
 
-Herald uses a `.heraldrc` YAML file for configuration:
+Herald uses a `.heraldrc` YAML file for configuration. The file includes comprehensive inline documentation explaining each option:
+
+### Self-Documenting Configuration
+
+When you run `herald init`, Herald generates a fully documented configuration file with:
+
+- Detailed comments for every configuration option
+- Valid values and examples
+- Usage explanations for semver levels
+- CI integration setup instructions
+
+### Configuration Options
 
 ```yaml
 # Version configuration
