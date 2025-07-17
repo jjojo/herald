@@ -1,0 +1,188 @@
+# GoReleaser configuration for Herald
+# This file configures how Herald is built and distributed across platforms
+
+# Project information
+project_name: herald
+
+# Build configuration
+builds:
+  - id: herald
+    main: ./cmd/herald
+    binary: herald
+
+    # Build for multiple platforms
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+
+    goarch:
+      - amd64
+      - arm64
+      - arm
+
+    goarm:
+      - "6"
+      - "7"
+
+    # Ignore specific combinations
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+      - goos: freebsd
+        goarch: arm
+      - goos: freebsd
+        goarch: arm64
+
+    # Build flags and environment
+    env:
+      - CGO_ENABLED=0
+
+    # Linker flags to inject version info
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.GitCommit={{.ShortCommit}}
+      - -X main.BuildDate={{.Date}}
+      - -X main.BuiltBy=goreleaser
+
+# Archive configuration
+archives:
+  - id: herald-archives
+    builds:
+      - herald
+
+    # Archive format per OS
+    format_overrides:
+      - goos: windows
+        format: zip
+
+    # Archive contents
+    files:
+      - README.md
+      - LICENSE*
+      - CHANGELOG.md
+      - .heraldrc
+      - GITLAB_INTEGRATION.md
+
+# Package managers
+brews:
+  - name: herald
+    repository:
+      owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+      name: homebrew-tap
+      token: "{{ .Env.GITHUB_TOKEN }}"
+
+    # Homebrew formula details
+    homepage: https://github.com/{{ .Env.GITHUB_REPOSITORY }}
+    description: "Release management tool using conventional commits"
+    license: MIT
+
+    # Dependencies
+    dependencies:
+      - name: git
+
+    # Installation test
+    test: |
+      system "#{bin}/herald --help"
+
+# Snapcraft (Linux)
+snapcrafts:
+  - name: herald
+    summary: Release management tool using conventional commits
+    description: |
+      Herald automates release management by analyzing git commit history 
+      using conventional commits standard to generate release notes and 
+      manage semantic versioning.
+
+    # Snap configuration
+    grade: stable
+    confinement: strict
+    license: MIT
+
+    # Plugs for git access
+    plugs:
+      home:
+      network:
+      removable-media:
+
+# Docker images
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:latest-amd64"
+
+    dockerfile: Dockerfile
+    use: buildx
+
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
+    extra_files:
+      - .heraldrc
+
+# GitHub Release configuration
+release:
+  # Release notes generation
+  header: |
+    ## Herald {{.Version}}
+
+    Release management made simple with conventional commits.
+
+  footer: |
+    ## Installation
+
+    ### Binary Download
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Package Managers
+
+    **Homebrew (macOS/Linux):**
+    ```bash
+    brew install {{ .Env.GITHUB_REPOSITORY_OWNER }}/tap/herald
+    ```
+
+    **Snap (Linux):**
+    ```bash
+    snap install herald
+    ```
+
+    **Docker:**
+    ```bash
+    docker pull ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:{{.Version}}
+    ```
+
+    ## What's New
+
+    {{ range .Notes }}
+    {{ . }}
+    {{ end }}
+
+  # Don't create a release if Herald already created one
+  disable: false
+
+  # Release mode
+  mode: replace
+
+# Checksum
+checksum:
+  name_template: "checksums.txt"
+
+# Source archive
+source:
+  enabled: true
+
+# Changelog configuration (Herald will provide this)
+changelog:
+  disable: true
+
+# Announce
+announce:
+  skip: true

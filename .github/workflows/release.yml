@@ -1,0 +1,245 @@
+name: Release Management with Herald
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # Build Stage - Get version and build artifacts
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.version.outputs.should_release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Build Herald
+        run: go build -o herald ./cmd/herald
+
+      - name: Get next version
+        id: version
+        run: |
+          VERSION=$(./herald version-bump --next-version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Next version will be: $VERSION"
+
+          # Check if there are changes that warrant a release
+          if ./herald version-bump | grep -q "No significant changes"; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build application with version
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          go build -ldflags "-X main.Version=$VERSION" -o myapp ./cmd/herald
+          echo "Built application with version: $VERSION"
+
+      - name: Upload Herald binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: herald
+          path: herald
+          retention-days: 1
+
+  # Test Stage - Run tests on built artifacts
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Run tests
+        run: |
+          echo "Testing version ${{ needs.build.outputs.version }}"
+          go test ./...
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+
+  # Release Stage - Create git tag, changelog, and GitHub release
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      needs.build.outputs.should_release == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Download Herald binary
+        uses: actions/download-artifact@v3
+        with:
+          name: herald
+          path: .
+
+      - name: Make Herald executable
+        run: chmod +x herald
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure Herald for GitHub
+        run: |
+          cat > .heraldrc << EOF
+          version:
+            initial: "0.1.0"
+            prefix: "v"
+          commits:
+            types:
+              feat:
+                title: "Features"
+                semver: "minor"
+              fix:
+                title: "Bug Fixes"
+                semver: "patch"
+              docs:
+                title: "Documentation"
+                semver: "none"
+              style:
+                title: "Styles"
+                semver: "none"
+              refactor:
+                title: "Code Refactoring"
+                semver: "none"
+              test:
+                title: "Tests"
+                semver: "none"
+              chore:
+                title: "Chores"
+                semver: "none"
+            breaking_change_keywords:
+              - "BREAKING CHANGE"
+              - "BREAKING-CHANGE"
+          changelog:
+            file: "CHANGELOG.md"
+            template: "default"
+            include_all: false
+          git:
+            tag_message: "Release {version}"
+            commit_changelog: true
+            commit_message: "chore: update changelog for {version}"
+          ci:
+            enabled: true
+            provider: "github"
+            trigger_on_release: false
+            github:
+              repository: "${{ github.repository }}"
+              access_token: "${{ secrets.GITHUB_TOKEN }}"
+              create_release: true
+          EOF
+
+      - name: Create release with Herald
+        run: |
+          echo "Creating release ${{ needs.build.outputs.version }}"
+          ./herald release
+
+      - name: Push changes
+        run: |
+          git push origin ${{ github.ref_name }}
+          git push --tags
+
+  # GoReleaser Stage - Create distribution packages
+  goreleaser:
+    runs-on: ubuntu-latest
+    needs: [release]
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      needs.build.outputs.should_release == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Manual Release Trigger
+  manual-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Build Herald
+        run: go build -o herald ./cmd/herald
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Manual release with Herald
+        run: |
+          ./herald release
+          git push origin ${{ github.ref_name }}
+          git push --tags
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

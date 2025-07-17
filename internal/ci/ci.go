@@ -48,231 +48,96 @@ func (i *Integrator) TriggerRelease(releaseInfo *ReleaseInfo) error {
 
 	switch i.config.CI.Provider {
 	case "github":
-		return i.triggerGitHubAction(releaseInfo)
+		return i.triggerGitHubRelease(releaseInfo)
 	case "gitlab":
 		return i.triggerGitLabPipeline(releaseInfo)
-	case "webhook":
-		return i.triggerWebhook(releaseInfo)
 	default:
-		return fmt.Errorf("unsupported CI provider: %s", i.config.CI.Provider)
+		return fmt.Errorf("unsupported CI provider: %s (supported: github, gitlab)", i.config.CI.Provider)
 	}
 }
 
-// triggerGitHubAction triggers a GitHub Action workflow
-func (i *Integrator) triggerGitHubAction(releaseInfo *ReleaseInfo) error {
-	if i.config.CI.WebhookURL == "" {
-		return fmt.Errorf("webhook URL is required for GitHub integration")
+// triggerGitHubRelease creates a GitHub release
+func (i *Integrator) triggerGitHubRelease(releaseInfo *ReleaseInfo) error {
+	// Skip if GitHub release creation is disabled
+	if !i.config.CI.GitHub.CreateRelease {
+		return nil
 	}
 
-	payload := map[string]interface{}{
-		"event_type": "release",
-		"client_payload": map[string]interface{}{
-			"version":     releaseInfo.Version,
-			"tag":         releaseInfo.Tag,
-			"changelog":   releaseInfo.Changelog,
-			"repository":  releaseInfo.Repository,
-			"branch":      releaseInfo.Branch,
-			"commit_hash": releaseInfo.CommitHash,
-			"metadata":    releaseInfo.Metadata,
-		},
+	// Get repository from config
+	repository := i.config.CI.GitHub.Repository
+	if repository == "" {
+		return fmt.Errorf("GitHub repository is required for release creation")
 	}
 
-	return i.sendWebhookRequest(payload)
+	// Get access token from config or environment
+	accessToken := i.config.CI.GitHub.AccessToken
+	if accessToken == "" {
+		accessToken = os.Getenv("GITHUB_TOKEN")
+	}
+	if accessToken == "" {
+		return fmt.Errorf("GitHub access token is required for release creation (set in config or GITHUB_TOKEN env var)")
+	}
+
+	return i.createGitHubRelease(releaseInfo, repository, accessToken)
 }
 
 // triggerGitLabPipeline triggers a GitLab CI pipeline and creates a GitLab release
 func (i *Integrator) triggerGitLabPipeline(releaseInfo *ReleaseInfo) error {
-	if i.config.CI.WebhookURL == "" {
-		return fmt.Errorf("webhook URL is required for GitLab integration")
-	}
-
-	// Create GitLab release first
+	// Create GitLab release
 	err := i.createGitLabRelease(releaseInfo)
 	if err != nil {
-		// Log but don't fail the pipeline trigger
+		// Log but don't fail
 		fmt.Printf("Warning: Failed to create GitLab release: %v\n", err)
 	}
 
-	// Trigger pipeline
-	payload := map[string]interface{}{
-		"token":     extractTokenFromURL(i.config.CI.WebhookURL),
-		"ref":       releaseInfo.Branch,
-		"variables": map[string]string{
-			"HERALD_VERSION":     releaseInfo.Version,
-			"HERALD_TAG":         releaseInfo.Tag,
-			"HERALD_COMMIT_HASH": releaseInfo.CommitHash,
-			"HERALD_RELEASE":     "true",
-		},
-	}
-
-	return i.sendWebhookRequest(payload)
+	return nil
 }
 
-// triggerWebhook sends a generic webhook
-func (i *Integrator) triggerWebhook(releaseInfo *ReleaseInfo) error {
-	if i.config.CI.WebhookURL == "" {
-		return fmt.Errorf("webhook URL is required for webhook integration")
+// createGitHubRelease creates a release using GitHub's Release API
+func (i *Integrator) createGitHubRelease(releaseInfo *ReleaseInfo, repository, accessToken string) error {
+	// GitHub Release API URL
+	releaseURL := fmt.Sprintf("https://api.github.com/repos/%s/releases", repository)
+
+	// Create release payload
+	releasePayload := map[string]interface{}{
+		"tag_name":         releaseInfo.Tag,
+		"target_commitish": releaseInfo.Branch,
+		"name":            fmt.Sprintf("Release %s", releaseInfo.Version),
+		"body":            releaseInfo.Changelog,
+		"draft":           false,
+		"prerelease":      false,
 	}
 
-	payload := map[string]interface{}{
-		"event":        "release",
-		"version":      releaseInfo.Version,
-		"tag":          releaseInfo.Tag,
-		"changelog":    releaseInfo.Changelog,
-		"repository":   releaseInfo.Repository,
-		"branch":       releaseInfo.Branch,
-		"commit_hash":  releaseInfo.CommitHash,
-		"release_date": releaseInfo.ReleaseDate,
-		"metadata":     releaseInfo.Metadata,
-	}
-
-	return i.sendWebhookRequest(payload)
-}
-
-// sendWebhookRequest sends an HTTP request to the webhook URL
-func (i *Integrator) sendWebhookRequest(payload interface{}) error {
-	jsonData, err := json.Marshal(payload)
+	// Marshal payload
+	jsonData, err := json.Marshal(releasePayload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal webhook payload: %w", err)
+		return fmt.Errorf("failed to marshal GitHub release payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", i.config.CI.WebhookURL, bytes.NewBuffer(jsonData))
+	// Create request
+	req, err := http.NewRequest("POST", releaseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create webhook request: %w", err)
+		return fmt.Errorf("failed to create GitHub release request: %w", err)
 	}
 
+	// Set headers
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Authorization", fmt.Sprintf("token %s", accessToken))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Herald/1.0")
 
+	// Send request
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send webhook request: %w", err)
+		return fmt.Errorf("failed to send GitHub release request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook request failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("GitHub release creation failed with status: %d", resp.StatusCode)
 	}
 
 	return nil
-}
-
-// CreateReleaseInfo creates release information from version and other data
-func (i *Integrator) CreateReleaseInfo(ver *version.Version, changelog, repository, branch, commitHash string) *ReleaseInfo {
-	return &ReleaseInfo{
-		Version:     ver.String(),
-		Tag:         ver.String(),
-		Changelog:   changelog,
-		Repository:  repository,
-		Branch:      branch,
-		CommitHash:  commitHash,
-		ReleaseDate: time.Now(),
-		Metadata: map[string]string{
-			"herald_version": "1.0.0", // Herald tool version
-			"provider":       i.config.CI.Provider,
-		},
-	}
-}
-
-// ValidateConfiguration validates the CI configuration
-func (i *Integrator) ValidateConfiguration() error {
-	if !i.config.CI.Enabled {
-		return nil // No validation needed if disabled
-	}
-
-	if i.config.CI.Provider == "" {
-		return fmt.Errorf("CI provider must be specified when CI is enabled")
-	}
-
-	supportedProviders := []string{"github", "gitlab", "webhook"}
-	validProvider := false
-	for _, provider := range supportedProviders {
-		if i.config.CI.Provider == provider {
-			validProvider = true
-			break
-		}
-	}
-
-	if !validProvider {
-		return fmt.Errorf("unsupported CI provider: %s (supported: %v)", i.config.CI.Provider, supportedProviders)
-	}
-
-	if i.config.CI.TriggerOnRelease && i.config.CI.WebhookURL == "" {
-		return fmt.Errorf("webhook URL is required when trigger_on_release is enabled")
-	}
-
-	return nil
-}
-
-// IsEnabled returns true if CI integration is enabled
-func (i *Integrator) IsEnabled() bool {
-	return i.config.CI.Enabled
-}
-
-// GetProvider returns the configured CI provider
-func (i *Integrator) GetProvider() string {
-	return i.config.CI.Provider
-}
-
-// TestConnection tests the CI integration connection
-func (i *Integrator) TestConnection() error {
-	if !i.config.CI.Enabled {
-		return fmt.Errorf("CI integration is disabled")
-	}
-
-	if i.config.CI.WebhookURL == "" {
-		return fmt.Errorf("webhook URL is not configured")
-	}
-
-	// Create a test payload
-	testPayload := map[string]interface{}{
-		"event":   "test",
-		"message": "Herald CI integration test",
-		"timestamp": time.Now(),
-	}
-
-	// Send test request (we'll just check if we can reach the endpoint)
-	jsonData, err := json.Marshal(testPayload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal test payload: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", i.config.CI.WebhookURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create test request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Herald/1.0 (test)")
-
-	resp, err := i.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to reach webhook URL: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// For testing, we accept any response that's not a connection error
-	return nil
-}
-
-// extractTokenFromURL extracts token from GitLab webhook URL
-func extractTokenFromURL(url string) string {
-	// This is a simple implementation - in practice you might want more sophisticated parsing
-	// For GitLab, tokens are usually in the URL path or query parameters
-	return ""
-}
-
-// SetCustomClient allows setting a custom HTTP client (useful for testing)
-func (i *Integrator) SetCustomClient(client *http.Client) {
-	i.client = client
-}
-
-// AddMetadata adds custom metadata to release info
-func (ri *ReleaseInfo) AddMetadata(key, value string) {
-	if ri.Metadata == nil {
-		ri.Metadata = make(map[string]string)
-	}
-	ri.Metadata[key] = value
 }
 
 // createGitLabRelease creates a release using GitLab's Release API
@@ -337,4 +202,82 @@ func (i *Integrator) createGitLabRelease(releaseInfo *ReleaseInfo) error {
 	}
 
 	return nil
+}
+
+// CreateReleaseInfo creates release information from version and other data
+func (i *Integrator) CreateReleaseInfo(ver *version.Version, changelog, repository, branch, commitHash string) *ReleaseInfo {
+	return &ReleaseInfo{
+		Version:     ver.String(),
+		Tag:         ver.String(),
+		Changelog:   changelog,
+		Repository:  repository,
+		Branch:      branch,
+		CommitHash:  commitHash,
+		ReleaseDate: time.Now(),
+		Metadata: map[string]string{
+			"herald_version": "1.0.0", // Herald tool version
+			"provider":       i.config.CI.Provider,
+		},
+	}
+}
+
+// ValidateConfiguration validates the CI configuration
+func (i *Integrator) ValidateConfiguration() error {
+	if !i.config.CI.Enabled {
+		return nil // No validation needed if disabled
+	}
+
+	if i.config.CI.Provider == "" {
+		return fmt.Errorf("CI provider must be specified when CI is enabled")
+	}
+
+	supportedProviders := []string{"github", "gitlab"}
+	validProvider := false
+	for _, provider := range supportedProviders {
+		if i.config.CI.Provider == provider {
+			validProvider = true
+			break
+		}
+	}
+
+	if !validProvider {
+		return fmt.Errorf("unsupported CI provider: %s (supported: %v)", i.config.CI.Provider, supportedProviders)
+	}
+
+	// Validate provider-specific configuration
+	switch i.config.CI.Provider {
+	case "github":
+		if i.config.CI.GitHub.CreateRelease && i.config.CI.GitHub.Repository == "" {
+			return fmt.Errorf("GitHub repository is required when create_release is enabled")
+		}
+	case "gitlab":
+		if i.config.CI.GitLab.CreateRelease && i.config.CI.GitLab.ProjectID == "" {
+			return fmt.Errorf("GitLab project ID is required when create_release is enabled")
+		}
+	}
+
+	return nil
+}
+
+// IsEnabled returns true if CI integration is enabled
+func (i *Integrator) IsEnabled() bool {
+	return i.config.CI.Enabled
+}
+
+// GetProvider returns the configured CI provider
+func (i *Integrator) GetProvider() string {
+	return i.config.CI.Provider
+}
+
+// SetCustomClient allows setting a custom HTTP client (useful for testing)
+func (i *Integrator) SetCustomClient(client *http.Client) {
+	i.client = client
+}
+
+// AddMetadata adds custom metadata to release info
+func (ri *ReleaseInfo) AddMetadata(key, value string) {
+	if ri.Metadata == nil {
+		ri.Metadata = make(map[string]string)
+	}
+	ri.Metadata[key] = value
 } 

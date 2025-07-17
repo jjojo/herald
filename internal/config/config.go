@@ -55,14 +55,21 @@ type CIConfig struct {
 	Enabled          bool             `yaml:"enabled"`
 	Provider         string           `yaml:"provider"`
 	TriggerOnRelease bool             `yaml:"trigger_on_release"`
-	WebhookURL       string           `yaml:"webhook_url"`
 	GitLab           GitLabConfig     `yaml:"gitlab,omitempty"`
+	GitHub           GitHubConfig     `yaml:"github,omitempty"`
 }
 
 // GitLabConfig holds GitLab-specific CI settings
 type GitLabConfig struct {
-	ProjectID   string `yaml:"project_id"`
-	AccessToken string `yaml:"access_token"`
+	ProjectID     string `yaml:"project_id"`
+	AccessToken   string `yaml:"access_token"`
+	CreateRelease bool   `yaml:"create_release"`
+}
+
+// GitHubConfig holds GitHub-specific CI settings
+type GitHubConfig struct {
+	Repository    string `yaml:"repository"`    // owner/repo
+	AccessToken   string `yaml:"access_token"`
 	CreateRelease bool   `yaml:"create_release"`
 }
 
@@ -120,7 +127,16 @@ func DefaultConfig() *Config {
 			Enabled:          false,
 			Provider:         "github",
 			TriggerOnRelease: true,
-			WebhookURL:       "",
+			GitHub: GitHubConfig{
+				Repository:    "",
+				AccessToken:   "",
+				CreateRelease: true,
+			},
+			GitLab: GitLabConfig{
+				ProjectID:     "",
+				AccessToken:   "",
+				CreateRelease: true,
+			},
 		},
 	}
 }
@@ -270,18 +286,23 @@ ci:
   enabled: false
   
   # CI provider type
-  # Supported values: "github", "gitlab", "webhook"
-  provider: "gitlab"
+  # Supported values: "github", "gitlab"
+  provider: "github"
   
   # Whether to trigger CI pipeline after creating a release
   trigger_on_release: true
   
-  # Webhook URL for CI integration
-  # Format depends on provider:
-  # - GitHub: https://api.github.com/repos/owner/repo/dispatches
-  # - GitLab: https://gitlab.com/api/v4/projects/ID/trigger/pipeline
-  # - Webhook: Your custom webhook endpoint
-  webhook_url: ""
+  # GitHub-specific configuration (only used when provider is "github")
+  github:
+    # GitHub repository in "owner/repo" format
+    repository: ""
+    
+    # GitHub access token with repo permissions
+    # Can also be set via GITHUB_TOKEN environment variable
+    access_token: ""
+    
+    # Whether to create GitHub releases automatically
+    create_release: true
   
   # GitLab-specific configuration (only used when provider is "gitlab")
   gitlab:
