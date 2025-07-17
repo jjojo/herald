@@ -153,22 +153,128 @@ func InitializeConfig() error {
 		return fmt.Errorf("config file %s already exists", configFile)
 	}
 
-	// Create default config
-	config := DefaultConfig()
-
-	// Marshal to YAML
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
+	// Generate documented config content
+	configContent := generateDocumentedConfig()
 
 	// Write to file
-	if err := os.WriteFile(configFile, data, 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	fmt.Printf("Initialized %s with default configuration\n", configFile)
 	return nil
+}
+
+// generateDocumentedConfig creates a YAML config with comprehensive comments
+func generateDocumentedConfig() string {
+	return `# Herald Configuration File
+# This file configures Herald's behavior for automated release management
+# using conventional commits and semantic versioning.
+
+# Version Configuration
+version:
+  # The initial version to use when no git tags exist
+  # Must be a valid semantic version (e.g., "0.1.0", "1.0.0")
+  initial: "0.1.0"
+  
+  # Prefix for git tags (e.g., "v" creates tags like "v1.0.0")
+  # Set to empty string "" for no prefix
+  prefix: "v"
+
+# Conventional Commits Configuration
+commits:
+  # Define commit types, their display titles, and version bump behavior
+  # Each commit type can specify:
+  #   title: Display name in changelog
+  #   semver: Version bump level ("major", "minor", "patch", "none")
+  types:
+    # New features - typically bump minor version
+    feat:
+      title: "Features"
+      semver: "minor"
+    
+    # Bug fixes - typically bump patch version
+    fix:
+      title: "Bug Fixes"
+      semver: "patch"
+    
+    # Documentation changes - no version bump by default
+    docs:
+      title: "Documentation"
+      semver: "none"
+    
+    # Code style changes (formatting, etc.) - no version bump
+    style:
+      title: "Styles"
+      semver: "none"
+    
+    # Code refactoring without functional changes - no version bump
+    refactor:
+      title: "Code Refactoring"
+      semver: "none"
+    
+    # Test additions or modifications - no version bump
+    test:
+      title: "Tests"
+      semver: "none"
+    
+    # Build process, tooling, dependencies - no version bump by default
+    chore:
+      title: "Chores"
+      semver: "none"
+  
+  # Keywords that indicate breaking changes (triggers major version bump)
+  # These can appear in commit body or footer
+  breaking_change_keywords:
+    - "BREAKING CHANGE"
+    - "BREAKING-CHANGE"
+
+# Changelog Configuration
+changelog:
+  # Path to the changelog file (relative to repository root)
+  file: "CHANGELOG.md"
+  
+  # Template to use for changelog generation
+  # Currently only "default" is supported
+  template: "default"
+  
+  # Whether to include all commit types in changelog
+  # true: Include all configured commit types
+  # false: Only include "feat" and "fix" (plus breaking changes)
+  include_all: false
+
+# Git Configuration
+git:
+  # Message template for git tags
+  # {version} will be replaced with the actual version
+  tag_message: "Release {version}"
+  
+  # Whether to commit the changelog file after updating it
+  commit_changelog: true
+  
+  # Commit message template when committing changelog
+  # {version} will be replaced with the actual version
+  commit_message: "chore: update changelog for {version}"
+
+# CI/CD Integration (Optional)
+ci:
+  # Enable or disable CI integration
+  enabled: false
+  
+  # CI provider type
+  # Supported values: "github", "gitlab", "webhook"
+  provider: "github"
+  
+  # Whether to trigger CI pipeline after creating a release
+  trigger_on_release: true
+  
+  # Webhook URL for CI integration
+  # Format depends on provider:
+  # - GitHub: https://api.github.com/repos/owner/repo/dispatches
+  # - GitLab: https://gitlab.com/api/v4/projects/ID/trigger/pipeline
+  # - Webhook: Your custom webhook endpoint
+  webhook_url: ""
+`
 }
 
 // Validate checks if the configuration is valid
