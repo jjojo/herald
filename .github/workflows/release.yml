@@ -117,15 +117,22 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create release with Herald
+      - name: Clean working directory and run Herald
         run: |
           echo "Creating release ${{ needs.build.outputs.version }}"
-          echo "Current git status:"
-          git status
-          echo "Git configuration:"
-          git config --list | grep user
-          echo "Running Herald version-bump to check current state:"
-          ./herald version-bump
+
+          # Check what files are modified
+          echo "Git status before cleanup:"
+          git status --porcelain
+
+          # Reset any permission changes or unstaged modifications
+          git checkout -- . || echo "No files to reset"
+          git clean -fd || echo "No untracked files to clean"
+
+          echo "Git status after cleanup:"
+          git status --porcelain
+
+          # Now run Herald release
           echo "Running Herald release:"
           ./herald release
 
