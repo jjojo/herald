@@ -87,13 +87,27 @@ version:
 # Conventional commits configuration
 commits:
   types:
-    feat: "Features"
-    fix: "Bug Fixes"
-    docs: "Documentation"
-    style: "Styles"
-    refactor: "Code Refactoring"
-    test: "Tests"
-    chore: "Chores"
+    feat:
+      title: "Features"
+      semver: "minor" # Version bump level
+    fix:
+      title: "Bug Fixes"
+      semver: "patch"
+    docs:
+      title: "Documentation"
+      semver: "none" # No version bump
+    style:
+      title: "Styles"
+      semver: "none"
+    refactor:
+      title: "Code Refactoring"
+      semver: "none"
+    test:
+      title: "Tests"
+      semver: "none"
+    chore:
+      title: "Chores"
+      semver: "none"
   breaking_change_keywords: ["BREAKING CHANGE", "BREAKING-CHANGE"]
 
 # Changelog configuration
@@ -130,10 +144,30 @@ Herald analyzes commits following the [Conventional Commits](https://www.convent
 
 ### Commit Types and Version Bumps
 
-- `feat:` - New features → **Minor version bump**
-- `fix:` - Bug fixes → **Patch version bump**
-- `BREAKING CHANGE:` or `!` - Breaking changes → **Major version bump**
-- `docs:`, `style:`, `refactor:`, `test:`, `chore:` - No version bump (unless breaking)
+Herald allows you to configure which version bump each commit type should trigger:
+
+- **Configurable per commit type** - Set `semver: "major"`, `"minor"`, `"patch"`, or `"none"`
+- **Breaking changes override** - `BREAKING CHANGE:` or `!` always triggers major bump
+- **Highest bump wins** - If multiple commit types are present, the highest bump level is used
+
+#### Default Configuration
+
+- `feat:` → **Minor version bump**
+- `fix:` → **Patch version bump**
+- `docs:`, `style:`, `refactor:`, `test:`, `chore:` → **No version bump**
+
+#### Custom Configuration Examples
+
+```yaml
+commits:
+  types:
+    docs:
+      title: "Documentation"
+      semver: "patch" # Docs now bump patch version
+    chore:
+      title: "Chores"
+      semver: "minor" # Chores now bump minor version
+```
 
 ### Examples
 

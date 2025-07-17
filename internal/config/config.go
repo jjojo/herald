@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,8 +26,14 @@ type VersionConfig struct {
 
 // CommitsConfig holds conventional commits settings
 type CommitsConfig struct {
-	Types                   map[string]string `yaml:"types"`
-	BreakingChangeKeywords []string          `yaml:"breaking_change_keywords"`
+	Types                   map[string]CommitType `yaml:"types"`
+	BreakingChangeKeywords []string              `yaml:"breaking_change_keywords"`
+}
+
+// CommitType defines a commit type with its display title and semver bump level
+type CommitType struct {
+	Title  string `yaml:"title"`
+	Semver string `yaml:"semver"` // "major", "minor", "patch", "none"
 }
 
 // ChangelogConfig holds changelog generation settings
@@ -59,14 +66,35 @@ func DefaultConfig() *Config {
 			Prefix:  "v",
 		},
 		Commits: CommitsConfig{
-			Types: map[string]string{
-				"feat":     "Features",
-				"fix":      "Bug Fixes",
-				"docs":     "Documentation",
-				"style":    "Styles",
-				"refactor": "Code Refactoring",
-				"test":     "Tests",
-				"chore":    "Chores",
+			Types: map[string]CommitType{
+				"feat": {
+					Title:  "Features",
+					Semver: "minor",
+				},
+				"fix": {
+					Title:  "Bug Fixes",
+					Semver: "patch",
+				},
+				"docs": {
+					Title:  "Documentation",
+					Semver: "none",
+				},
+				"style": {
+					Title:  "Styles",
+					Semver: "none",
+				},
+				"refactor": {
+					Title:  "Code Refactoring",
+					Semver: "none",
+				},
+				"test": {
+					Title:  "Tests",
+					Semver: "none",
+				},
+				"chore": {
+					Title:  "Chores",
+					Semver: "none",
+				},
 			},
 			BreakingChangeKeywords: []string{"BREAKING CHANGE", "BREAKING-CHANGE"},
 		},
@@ -155,6 +183,25 @@ func (c *Config) Validate() error {
 
 	if len(c.Commits.Types) == 0 {
 		return fmt.Errorf("commits.types cannot be empty")
+	}
+
+	// Validate semver levels for commit types
+	validSemverLevels := []string{"major", "minor", "patch", "none"}
+	for commitType, typeConfig := range c.Commits.Types {
+		if typeConfig.Title == "" {
+			return fmt.Errorf("commit type '%s' must have a title", commitType)
+		}
+		
+		validSemver := false
+		for _, validLevel := range validSemverLevels {
+			if strings.ToLower(typeConfig.Semver) == validLevel {
+				validSemver = true
+				break
+			}
+		}
+		if !validSemver {
+			return fmt.Errorf("commit type '%s' has invalid semver level '%s' (must be: major, minor, patch, or none)", commitType, typeConfig.Semver)
+		}
 	}
 
 	return nil

@@ -30,7 +30,7 @@ commits:
 changelog:
   file: CHANGELOG.md
   template: default
-  include_all: false
+  include_all: true
 git:
   tag_message: Release {version}
   commit_changelog: true

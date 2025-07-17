@@ -152,18 +152,30 @@ func (p *Parser) CalculateBumpType(commits []*ConventionalCommit) BumpType {
 			return Major
 		}
 
-		// Features require minor bump
-		if commit.Type == "feat" && bumpType < Minor {
-			bumpType = Minor
-		}
-
-		// Bug fixes require patch bump
-		if commit.Type == "fix" && bumpType < Patch {
-			bumpType = Patch
+		// Check configured semver bump for this commit type
+		if commitTypeConfig, exists := p.config.Commits.Types[commit.Type]; exists {
+			commitBump := parseBumpTypeFromString(commitTypeConfig.Semver)
+			if commitBump > bumpType {
+				bumpType = commitBump
+			}
 		}
 	}
 
 	return bumpType
+}
+
+// parseBumpTypeFromString converts a string to BumpType
+func parseBumpTypeFromString(bumpStr string) BumpType {
+	switch strings.ToLower(bumpStr) {
+	case "major":
+		return Major
+	case "minor":
+		return Minor
+	case "patch":
+		return Patch
+	default:
+		return None
+	}
 }
 
 // hasBreakingChange checks if a commit contains breaking changes
@@ -216,8 +228,8 @@ func (p *Parser) extractBreakingChanges(commit *git.Commit) []string {
 
 // GetCommitTypeTitle returns the display title for a commit type
 func (p *Parser) GetCommitTypeTitle(commitType string) string {
-	if title, exists := p.config.Commits.Types[commitType]; exists {
-		return title
+	if commitTypeConfig, exists := p.config.Commits.Types[commitType]; exists {
+		return commitTypeConfig.Title
 	}
 	// Fallback to capitalized type
 	return strings.Title(commitType)
