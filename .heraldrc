@@ -1,0 +1,28 @@
+version:
+    initial: 0.1.0
+    prefix: v
+commits:
+    types:
+        chore: Chores
+        docs: Documentation
+        feat: Features
+        fix: Bug Fixes
+        refactor: Code Refactoring
+        style: Styles
+        test: Tests
+    breaking_change_keywords:
+        - BREAKING CHANGE
+        - BREAKING-CHANGE
+changelog:
+    file: CHANGELOG.md
+    template: default
+    include_all: false
+git:
+    tag_message: Release {version}
+    commit_changelog: true
+    commit_message: 'chore: update changelog for {version}'
+ci:
+    enabled: false
+    provider: github
+    trigger_on_release: true
+    webhook_url: ""
