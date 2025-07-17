@@ -103,14 +103,8 @@ jobs:
         with:
           go-version: "1.21"
 
-      - name: Download Herald binary
-        uses: actions/download-artifact@v4
-        with:
-          name: herald
-          path: .
-
-      - name: Make Herald executable
-        run: chmod +x herald
+      - name: Build Herald
+        run: go build -o herald ./cmd/herald
 
       - name: Configure Git
         run: |
