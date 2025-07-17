@@ -2,18 +2,16 @@ package git
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-// Repository wraps git repository operations
+// Repository wraps git repository operations using git commands
 type Repository struct {
-	repo *git.Repository
 	path string
 }
 
@@ -42,138 +40,127 @@ func OpenRepository(path string) (*Repository, error) {
 		path = "."
 	}
 
-	// Find the git repository
-	repo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to open git repository: %w", err)
-	}
-
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
+	// Check if we're in a git repository
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd.Dir = absPath
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("not a git repository (or any of the parent directories): %s", absPath)
+	}
+
 	return &Repository{
-		repo: repo,
 		path: absPath,
 	}, nil
 }
 
+// runGitCommand executes a git command and returns the output
+func (r *Repository) runGitCommand(args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = r.path
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git command failed: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // GetLatestTag returns the latest tag in the repository
 func (r *Repository) GetLatestTag() (*Tag, error) {
-	tagRefs, err := r.repo.Tags()
+	// Get all tags sorted by creation date
+	output, err := r.runGitCommand("tag", "-l", "--sort=-creatordate", "--format=%(refname:short)|%(creatordate:iso)|%(objectname)|%(contents:subject)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags: %w", err)
 	}
 
-	var latestTag *Tag
-	var latestDate time.Time
-
-	err = tagRefs.ForEach(func(ref *plumbing.Reference) error {
-		tagName := ref.Name().Short()
-		
-		// Get tag object
-		tagObj, err := r.repo.TagObject(ref.Hash())
-		if err != nil {
-			// Might be a lightweight tag, get commit directly
-			commit, err := r.repo.CommitObject(ref.Hash())
-			if err != nil {
-				return err
-			}
-			
-			if commit.Author.When.After(latestDate) {
-				latestDate = commit.Author.When
-				latestTag = &Tag{
-					Name: tagName,
-					Hash: ref.Hash().String(),
-					Date: commit.Author.When,
-					Message: "",
-				}
-			}
-			return nil
-		}
-
-		if tagObj.Tagger.When.After(latestDate) {
-			latestDate = tagObj.Tagger.When
-			latestTag = &Tag{
-				Name: tagName,
-				Hash: ref.Hash().String(),
-				Date: tagObj.Tagger.When,
-				Message: tagObj.Message,
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to iterate tags: %w", err)
+	if output == "" {
+		return nil, fmt.Errorf("no tags found")
 	}
 
-	return latestTag, nil
+	// Parse the first (latest) tag
+	lines := strings.Split(output, "\n")
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("no tags found")
+	}
+
+	parts := strings.Split(lines[0], "|")
+	if len(parts) < 4 {
+		return nil, fmt.Errorf("invalid tag format")
+	}
+
+	date, err := time.Parse("2006-01-02 15:04:05 -0700", parts[1])
+	if err != nil {
+		// Fallback to simpler format
+		date = time.Now()
+	}
+
+	return &Tag{
+		Name:    parts[0],
+		Hash:    parts[2],
+		Date:    date,
+		Message: parts[3],
+	}, nil
 }
 
 // GetCommitsSinceTag returns all commits since the specified tag
 func (r *Repository) GetCommitsSinceTag(tagName string) ([]*Commit, error) {
-	// Get HEAD commit
-	head, err := r.repo.Head()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	var sinceHash plumbing.Hash
+	var args []string
 	if tagName != "" {
-		// Find the tag
-		tagRef, err := r.repo.Tag(tagName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find tag %s: %w", tagName, err)
-		}
-		sinceHash = tagRef.Hash()
+		args = []string{"log", "--oneline", "--format=%H|%an|%ae|%at|%s|%b", tagName + "..HEAD"}
+	} else {
+		args = []string{"log", "--oneline", "--format=%H|%an|%ae|%at|%s|%b"}
 	}
 
-	// Get commit iterator from HEAD
-	commits, err := r.repo.Log(&git.LogOptions{
-		From: head.Hash(),
-	})
+	output, err := r.runGitCommand(args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get commit log: %w", err)
+		return nil, fmt.Errorf("failed to get commits: %w", err)
 	}
 
-	var result []*Commit
-	err = commits.ForEach(func(c *object.Commit) error {
-		// Stop if we reach the tag commit
-		if !sinceHash.IsZero() && c.Hash == sinceHash {
-			return fmt.Errorf("reached tag commit") // Use error to break the loop
+	if output == "" {
+		return []*Commit{}, nil
+	}
+
+	var commits []*Commit
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) < 5 {
+			continue
+		}
+
+		// Parse timestamp
+		timestamp, err := strconv.ParseInt(parts[3], 10, 64)
+		if err != nil {
+			timestamp = time.Now().Unix()
+		}
+
+		var body string
+		if len(parts) > 5 {
+			body = strings.Join(parts[5:], "|")
 		}
 
 		commit := &Commit{
-			Hash:    c.Hash.String(),
-			Message: c.Message,
-			Author:  c.Author.Name,
-			Email:   c.Author.Email,
-			Date:    c.Author.When,
+			Hash:    parts[0],
+			Author:  parts[1],
+			Email:   parts[2],
+			Date:    time.Unix(timestamp, 0),
+			Subject: parts[4],
+			Body:    body,
+			Message: parts[4] + "\n\n" + body,
 		}
 
-		// Split message into subject and body
-		lines := strings.Split(strings.TrimSpace(c.Message), "\n")
-		if len(lines) > 0 {
-			commit.Subject = lines[0]
-			if len(lines) > 2 {
-				commit.Body = strings.Join(lines[2:], "\n")
-			}
-		}
-
-		result = append(result, commit)
-		return nil
-	})
-
-	// If we got an error from breaking the loop, that's expected
-	if err != nil && !strings.Contains(err.Error(), "reached tag commit") {
-		return nil, fmt.Errorf("failed to iterate commits: %w", err)
+		commits = append(commits, commit)
 	}
 
-	return result, nil
+	return commits, nil
 }
 
 // GetAllCommits returns all commits in the repository
@@ -183,22 +170,22 @@ func (r *Repository) GetAllCommits() ([]*Commit, error) {
 
 // CreateTag creates a new git tag
 func (r *Repository) CreateTag(name, message string) error {
-	// Get HEAD commit
-	head, err := r.repo.Head()
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
 	// Check if tag already exists
-	_, err = r.repo.Tag(name)
+	_, err := r.runGitCommand("tag", "-l", name)
 	if err == nil {
-		return fmt.Errorf("tag %s already exists", name)
+		// Tag exists, check if it's actually there
+		if output, _ := r.runGitCommand("tag", "-l", name); output != "" {
+			return fmt.Errorf("tag %s already exists", name)
+		}
 	}
 
 	// Create the tag
-	_, err = r.repo.CreateTag(name, head.Hash(), &git.CreateTagOptions{
-		Message: message,
-	})
+	if message == "" {
+		_, err = r.runGitCommand("tag", name)
+	} else {
+		_, err = r.runGitCommand("tag", "-a", name, "-m", message)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create tag: %w", err)
 	}
@@ -208,75 +195,70 @@ func (r *Repository) CreateTag(name, message string) error {
 
 // GetTags returns all tags in the repository
 func (r *Repository) GetTags() ([]*Tag, error) {
-	tagRefs, err := r.repo.Tags()
+	output, err := r.runGitCommand("tag", "-l", "--sort=-creatordate", "--format=%(refname:short)|%(creatordate:iso)|%(objectname)|%(contents:subject)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tags: %w", err)
 	}
 
 	var tags []*Tag
-	err = tagRefs.ForEach(func(ref *plumbing.Reference) error {
-		tagName := ref.Name().Short()
-		
-		// Try to get tag object first
-		tagObj, err := r.repo.TagObject(ref.Hash())
-		if err != nil {
-			// Lightweight tag, get commit
-			commit, err := r.repo.CommitObject(ref.Hash())
-			if err != nil {
-				return err
-			}
-			
-			tags = append(tags, &Tag{
-				Name: tagName,
-				Hash: ref.Hash().String(),
-				Date: commit.Author.When,
-				Message: "",
-			})
-			return nil
+	if output == "" {
+		return tags, nil
+	}
+
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
 		}
 
-		// Annotated tag
-		tags = append(tags, &Tag{
-			Name: tagName,
-			Hash: ref.Hash().String(),
-			Date: tagObj.Tagger.When,
-			Message: tagObj.Message,
-		})
-		return nil
-	})
+		parts := strings.Split(line, "|")
+		if len(parts) < 4 {
+			continue
+		}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to iterate tags: %w", err)
+		date, err := time.Parse("2006-01-02 15:04:05 -0700", parts[1])
+		if err != nil {
+			date = time.Now()
+		}
+
+		tag := &Tag{
+			Name:    parts[0],
+			Hash:    parts[2],
+			Date:    date,
+			Message: parts[3],
+		}
+
+		tags = append(tags, tag)
 	}
+
+	// Sort by date (newest first)
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].Date.After(tags[j].Date)
+	})
 
 	return tags, nil
 }
 
 // IsClean returns true if the working directory is clean
 func (r *Repository) IsClean() (bool, error) {
-	worktree, err := r.repo.Worktree()
-	if err != nil {
-		return false, fmt.Errorf("failed to get worktree: %w", err)
-	}
-
-	status, err := worktree.Status()
+	output, err := r.runGitCommand("status", "--porcelain")
 	if err != nil {
 		return false, fmt.Errorf("failed to get status: %w", err)
 	}
 
-	return status.IsClean(), nil
+	return output == "", nil
 }
 
 // GetCurrentBranch returns the name of the current branch
 func (r *Repository) GetCurrentBranch() (string, error) {
-	head, err := r.repo.Head()
+	branch, err := r.runGitCommand("branch", "--show-current")
 	if err != nil {
-		return "", fmt.Errorf("failed to get HEAD: %w", err)
+		return "", fmt.Errorf("failed to get current branch: %w", err)
 	}
 
-	if !head.Name().IsBranch() {
+	if branch == "" {
 		return "", fmt.Errorf("HEAD is not on a branch")
 	}
 
-	return head.Name().Short(), nil
+	return branch, nil
 } 
