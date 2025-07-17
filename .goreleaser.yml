@@ -89,25 +89,25 @@ brews:
     test: |
       system "#{bin}/herald --help"
 
-# Snapcraft (Linux)
-snapcrafts:
-  - name: herald
-    summary: Release management tool using conventional commits
-    description: |
-      Herald automates release management by analyzing git commit history 
-      using conventional commits standard to generate release notes and 
-      manage semantic versioning.
-
-    # Snap configuration
-    grade: stable
-    confinement: strict
-    license: MIT
-
-    # Plugs for git access
-    plugs:
-      home:
-      network:
-      removable-media:
+# Snapcraft (Linux) - Disabled due to snapcraft not available in GitHub Actions
+# snapcrafts:
+#   - name: herald
+#     summary: Release management tool using conventional commits
+#     description: |
+#       Herald automates release management by analyzing git commit history
+#       using conventional commits standard to generate release notes and
+#       manage semantic versioning.
+#
+#     # Snap configuration
+#     grade: stable
+#     confinement: strict
+#     license: MIT
+#
+#     # Plugs for git access
+#     plugs:
+#       home:
+#       network:
+#       removable-media:
 
 # Docker images
 dockers:
@@ -149,9 +149,11 @@ release:
     brew install {{ .Env.GITHUB_REPOSITORY_OWNER }}/tap/herald
     ```
 
-    **Snap (Linux):**
+    **npm/npx:**
     ```bash
-    snap install herald
+    npm install -g herald
+    # or run directly with npx
+    npx herald --help
     ```
 
     **Docker:**
