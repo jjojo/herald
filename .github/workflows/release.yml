@@ -120,6 +120,13 @@ jobs:
       - name: Create release with Herald
         run: |
           echo "Creating release ${{ needs.build.outputs.version }}"
+          echo "Current git status:"
+          git status
+          echo "Git configuration:"
+          git config --list | grep user
+          echo "Running Herald version-bump to check current state:"
+          ./herald version-bump
+          echo "Running Herald release:"
           ./herald release
 
       - name: Push changes
