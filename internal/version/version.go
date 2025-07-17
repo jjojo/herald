@@ -74,13 +74,19 @@ func (m *Manager) ParseVersion(versionStr string) (*Version, error) {
 	// Parse major.minor.patch
 	parts := strings.Split(coreVersion, ".")
 	if len(parts) >= 1 {
-		fmt.Sscanf(parts[0], "%d", &majorInt)
+		if _, err := fmt.Sscanf(parts[0], "%d", &majorInt); err != nil {
+			majorInt = 0 // fallback to 0 if parsing fails
+		}
 	}
 	if len(parts) >= 2 {
-		fmt.Sscanf(parts[1], "%d", &minorInt)
+		if _, err := fmt.Sscanf(parts[1], "%d", &minorInt); err != nil {
+			minorInt = 0 // fallback to 0 if parsing fails
+		}
 	}
 	if len(parts) >= 3 {
-		fmt.Sscanf(parts[2], "%d", &patchInt)
+		if _, err := fmt.Sscanf(parts[2], "%d", &patchInt); err != nil {
+			patchInt = 0 // fallback to 0 if parsing fails
+		}
 	}
 
 	return &Version{

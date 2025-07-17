@@ -226,13 +226,21 @@ func (p *Parser) extractBreakingChanges(commit *git.Commit) []string {
 	return breakingChanges
 }
 
+// titleCase capitalizes the first letter of a string
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+}
+
 // GetCommitTypeTitle returns the display title for a commit type
 func (p *Parser) GetCommitTypeTitle(commitType string) string {
 	if commitTypeConfig, exists := p.config.Commits.Types[commitType]; exists {
 		return commitTypeConfig.Title
 	}
 	// Fallback to capitalized type
-	return strings.Title(commitType)
+	return titleCase(commitType)
 }
 
 // IsValidCommitType checks if a commit type is recognized

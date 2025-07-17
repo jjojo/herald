@@ -421,6 +421,7 @@ func executeNextVersionOnly(cfg *config.Config) error {
 	latestTag, err := repo.GetLatestTag()
 	if err != nil {
 		// No tags found, use initial version
+		latestTag = nil
 	}
 
 	// Get current version
