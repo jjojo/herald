@@ -117,48 +117,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Configure Herald for GitHub
-        run: |
-          cat > .heraldrc << EOF
-          version:
-            initial: "0.1.0"
-            prefix: "v"
-          commits:
-            types:
-              feat:
-                title: "Features"
-                semver: "minor"
-              fix:
-                title: "Bug Fixes"
-                semver: "patch"
-              docs:
-                title: "Documentation"
-                semver: "none"
-              style:
-                title: "Styles"
-                semver: "none"
-              refactor:
-                title: "Code Refactoring"
-                semver: "none"
-              test:
-                title: "Tests"
-                semver: "none"
-              chore:
-                title: "Chores"
-                semver: "none"
-            breaking_change_keywords:
-              - "BREAKING CHANGE"
-              - "BREAKING-CHANGE"
-          changelog:
-            file: "CHANGELOG.md"
-            template: "default"
-            include_all: false
-          git:
-            tag_message: "Release {version}"
-            commit_changelog: true
-            commit_message: "chore: update changelog for {version}"
-          EOF
-
       - name: Create release with Herald
         run: |
           echo "Creating release ${{ needs.build.outputs.version }}"
