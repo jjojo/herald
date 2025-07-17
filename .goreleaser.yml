@@ -69,25 +69,26 @@ archives:
       - GITLAB_INTEGRATION.md
 
 # Package managers
-brews:
-  - name: herald
-    repository:
-      owner: "jjojo"
-      name: homebrew-tap
-      token: "{{ .Env.GITHUB_TOKEN }}"
-
-    # Homebrew formula details
-    homepage: https://github.com/jjojo/herald
-    description: "Release management tool using conventional commits"
-    license: MIT
-
-    # Dependencies
-    dependencies:
-      - name: git
-
-    # Installation test
-    test: |
-      system "#{bin}/herald --help"
+# Homebrew tap disabled until jjojo/homebrew-tap repository is created
+# brews:
+#   - name: herald
+#     repository:
+#       owner: "jjojo"
+#       name: homebrew-tap
+#       token: "{{ .Env.GITHUB_TOKEN }}"
+#
+#     # Homebrew formula details
+#     homepage: https://github.com/jjojo/herald
+#     description: "Release management tool using conventional commits"
+#     license: MIT
+#
+#     # Dependencies
+#     dependencies:
+#       - name: git
+#
+#     # Installation test
+#     test: |
+#       system "#{bin}/herald --help"
 
 # Snapcraft (Linux) - Disabled due to snapcraft not available in GitHub Actions
 # snapcrafts:
@@ -143,11 +144,6 @@ release:
     Download the appropriate binary for your platform from the assets below.
 
     ### Package Managers
-
-    **Homebrew (macOS/Linux):**
-    ```bash
-    brew install {{ .Env.GITHUB_REPOSITORY_OWNER }}/tap/herald
-    ```
 
     **npm/npx:**
     ```bash
