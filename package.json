@@ -1,6 +1,6 @@
 {
-  "name": "herald-release-manager",
-  "version": "3.0.3",
+  "name": "@jjojo/herald",
+  "version": "3.1.0",
   "description": "Release management tool using conventional commits and semantic versioning",
   "main": "lib/index.js",
   "bin": {
