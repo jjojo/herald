@@ -110,24 +110,24 @@ archives:
 #       network:
 #       removable-media:
 
-# Docker images
-dockers:
-  - image_templates:
-      - "ghcr.io/jjojo/herald:{{ .Version }}-amd64"
-      - "ghcr.io/jjojo/herald:latest-amd64"
-
-    dockerfile: Dockerfile
-    use: buildx
-
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-
-    extra_files:
-      - .heraldrc
+# Docker images - Disabled for now to focus on npm publishing
+# dockers:
+#   - image_templates:
+#       - "ghcr.io/jjojo/herald:{{ .Version }}-amd64"
+#       - "ghcr.io/jjojo/herald:latest-amd64"
+#
+#     dockerfile: Dockerfile
+#     use: buildx
+#
+#     build_flag_templates:
+#       - "--platform=linux/amd64"
+#       - "--label=org.opencontainers.image.created={{.Date}}"
+#       - "--label=org.opencontainers.image.title={{.ProjectName}}"
+#       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+#       - "--label=org.opencontainers.image.version={{.Version}}"
+#
+#     extra_files:
+#       - .heraldrc
 
 # GitHub Release configuration
 release:
@@ -154,7 +154,8 @@ release:
 
     **Docker:**
     ```bash
-    docker pull ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/herald:{{.Version}}
+    # Docker images are not currently published
+    # Use npm installation instead
     ```
 
   # Don't create a release if Herald already created one
