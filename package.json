@@ -1,6 +1,6 @@
 {
-  "name": "herald",
-  "version": "1.0.0",
+  "name": "herald-release-manager",
+  "version": "3.0.3",
   "description": "Release management tool using conventional commits and semantic versioning",
   "main": "lib/index.js",
   "bin": {
@@ -16,9 +16,16 @@
     "conventional-commits",
     "changelog",
     "git",
-    "cli"
+    "cli",
+    "automation",
+    "versioning",
+    "conventional-commits",
+    "semver"
   ],
-  "author": "Netnod",
+  "author": {
+    "name": "Jonas Johansson",
+    "url": "https://github.com/jjojo/herald"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -48,5 +55,8 @@
     "x64",
     "arm64",
     "arm"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

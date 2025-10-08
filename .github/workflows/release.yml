@@ -1,136 +1,16 @@
-name: Release Management with Herald
+name: Release
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  packages: write
+    tags:
+      - "v*"
 
 jobs:
-  # Build Stage - Get version and build artifacts
-  build:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      should_release: ${{ steps.version.outputs.should_release }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.21"
-
-      - name: Build Herald
-        run: go build -o herald ./cmd/herald
-
-      - name: Get next version
-        id: version
-        run: |
-          VERSION=$(./herald version-bump --next-version)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Next version will be: $VERSION"
-
-          # Check if there are changes that warrant a release
-          if ./herald version-bump | grep -q "No significant changes"; then
-            echo "should_release=false" >> $GITHUB_OUTPUT
-          else
-            echo "should_release=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build application with version
-        if: steps.version.outputs.should_release == 'true'
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          go build -ldflags "-X main.Version=$VERSION" -o myapp ./cmd/herald
-          echo "Built application with version: $VERSION"
-
-      - name: Upload Herald binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: herald
-          path: herald
-          retention-days: 1
-
-  # Test Stage - Run tests on built artifacts
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.21"
-
-      - name: Run tests
-        run: |
-          echo "Testing version ${{ needs.build.outputs.version }}"
-          go test ./...
-
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-
-  # Release Stage - Create git tag, changelog, and GitHub release
-  release:
-    runs-on: ubuntu-latest
-    needs: [build, test]
-    if: |
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      needs.build.outputs.should_release == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.21"
-
-      - name: Build Herald
-        run: go build -o herald ./cmd/herald
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create release with Herald
-        run: |
-          echo "Creating release ${{ needs.build.outputs.version }}"
-          ./herald release
-
-      - name: Push changes
-        run: |
-          git push origin ${{ github.ref_name }}
-          git push --tags
-
-  # GoReleaser Stage - Create distribution packages
+  # Build and create GitHub release with GoReleaser
   goreleaser:
     runs-on: ubuntu-latest
-    needs: [release]
-    if: |
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      needs.build.outputs.should_release == 'true'
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -138,14 +18,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          go-version: "1.23"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
@@ -156,92 +29,67 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Manual Release Trigger
-  manual-release:
+  # Publish to NPM after GitHub release is created
+  publish-npm:
+    needs: goreleaser
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.21"
-
-      - name: Build Herald
-        run: go build -o herald ./cmd/herald
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Manual release with Herald
-        run: |
-          ./herald release
-          git push origin ${{ github.ref_name }}
-          git push --tags
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # NPM Publishing Stage - Publish to npm registry
-  npm-publish:
-    runs-on: ubuntu-latest
-    needs: [goreleaser]
-    if: |
-      github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      needs.build.outputs.should_release == 'true'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Get latest tag
-        id: tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0)
-          VERSION=${TAG#v}  # Remove 'v' prefix
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Latest tag: $TAG, Version: $VERSION"
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Update package.json version
+      - name: Update package version from release tag
         run: |
-          VERSION=${{ steps.tag.outputs.version }}
+          # Extract version from release tag (remove 'v' prefix if present)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Updating package.json version to $VERSION"
+
+          # Update package.json version
           npm version $VERSION --no-git-tag-version
-          echo "Updated package.json to version $VERSION"
 
-      - name: Verify package contents
-        run: |
-          echo "Package contents that will be published:"
-          npm pack --dry-run
+          # Show the updated package.json
+          cat package.json | grep '"version"'
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to NPM
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publication
+        run: |
+          echo "Verifying package was published..."
+          npm view @jjojo/herald version
+
+      - name: Create summary
+        run: |
+          echo "## 🚀 Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### GitHub Release" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release:** https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### NPM Package" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** \`@jjojo/herald\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** https://www.npmjs.com/package/@jjojo/herald" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Direct usage" >> $GITHUB_STEP_SUMMARY
+          echo "npx @jjojo/herald --help" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Global installation" >> $GITHUB_STEP_SUMMARY
+          echo "npm install -g @jjojo/herald" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Local installation" >> $GITHUB_STEP_SUMMARY
+          echo "npm install @jjojo/herald" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

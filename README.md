@@ -25,16 +25,23 @@ Herald is a CLI tool that automates release management by analyzing git commit h
 Use Herald with `npx` without installing:
 
 ```bash
-npx herald --help
-npx herald init
-npx herald release
+npx @jjojo/herald --help
+npx @jjojo/herald init
+npx @jjojo/herald release
 ```
 
 Install globally via npm:
 
 ```bash
-npm install -g herald
+npm install -g @jjojo/herald
 herald --help
+```
+
+Or install locally in your project:
+
+```bash
+npm install @jjojo/herald
+npx herald --help
 ```
 
 ### Direct Download
@@ -268,48 +275,6 @@ git commit -m "feat(auth): add OAuth2 support"
    - Calculate next version (e.g., 1.0.0 → 1.1.0)
    - Generate changelog entry
    - Create git tag (v1.1.0)
-   - Optionally trigger CI pipeline
-
-## CI Integration
-
-### GitHub Actions
-
-Configure GitHub Actions integration:
-
-```yaml
-# .heraldrc
-ci:
-  enabled: true
-  provider: "github"
-  trigger_on_release: true
-  webhook_url: "https://api.github.com/repos/owner/repo/dispatches"
-```
-
-### GitLab CI
-
-Configure GitLab CI integration:
-
-```yaml
-# .heraldrc
-ci:
-  enabled: true
-  provider: "gitlab"
-  trigger_on_release: true
-  webhook_url: "https://gitlab.com/api/v4/projects/ID/trigger/pipeline"
-```
-
-### Custom Webhook
-
-Configure custom webhook integration:
-
-```yaml
-# .heraldrc
-ci:
-  enabled: true
-  provider: "webhook"
-  trigger_on_release: true
-  webhook_url: "https://your-ci-system.com/webhook"
-```
 
 ## Generated Changelog
 
@@ -361,13 +326,14 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Comparison with semantic-release
 
-| Feature       | Herald             | semantic-release           |
-| ------------- | ------------------ | -------------------------- |
-| Language      | Go                 | Node.js                    |
-| Configuration | Single YAML file   | Multiple config files      |
-| Setup         | Simple binary      | Requires Node.js ecosystem |
-| Customization | Built-in options   | Plugin-based               |
-| Performance   | Fast native binary | Node.js runtime            |
-| Dependencies  | Minimal            | Heavy Node.js dependencies |
+ℹ️ Herald is in no way a drop in replacement of semantic-release.
+Herald is much more lightweight focusing on version number and changelogs only.
 
-Herald provides an alternative to semantic-release. Semantic-release is really good too and I have used it a lot. Herald is just my interpretation and simplification with the essential features most projects need. You choose the tool you want and need!
+| Feature       | Herald               | semantic-release           |
+| ------------- | -------------------- | -------------------------- |
+| Language      | Go                   | Node.js                    |
+| Configuration | Single YAML file     | Multiple config files      |
+| Setup         | Simple binary or npx | Requires Node.js ecosystem |
+| Customization | Built-in options     | Plugin-based               |
+| Performance   | Fast native binary   | Node.js runtime            |
+| Dependencies  | Minimal              | Heavy Node.js dependencies |

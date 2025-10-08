@@ -147,9 +147,9 @@ release:
 
     **npm/npx:**
     ```bash
-    npm install -g herald
+    npm install -g @jjojo/herald
     # or run directly with npx
-    npx herald --help
+    npx @jjojo/herald --help
     ```
 
     **Docker:**
